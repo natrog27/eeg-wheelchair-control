@@ -142,7 +142,7 @@ def build_dataset(subject_ids: list[int], data_dir: str = "BCICIV_2a_gdf") -> tu
     subject_list = []
 
     for subject_id in subject_ids:
-        power, labels = load_subject(subject_id, data_dir)
+        power, labels = load_subject(subject_id, data_dir=data_dir)
         X_list.append(power)
         y_list.append(labels)
         subject_list.extend([subject_id] * len(power))
@@ -245,7 +245,7 @@ def build_and_save_dataset(subject_ids: list[int],
 
     for subject_id in subject_ids:
         print(f"processing subject {subject_id}...")
-        power, labels = load_subject(subject_id, data_dir,  manual_exclude=exclude_map.get(subject_id, []))
+        power, labels = load_subject(subject_id, data_dir=data_dir,  manual_exclude=exclude_map.get(subject_id, []))
         np.save(save_path / f"subject_{subject_id}_X.npy", power)
         np.save(save_path / f"subject_{subject_id}_y.npy", labels)
         print(f"subject {subject_id} saved -> {power.shape}")
