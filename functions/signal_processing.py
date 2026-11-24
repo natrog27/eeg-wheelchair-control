@@ -5,6 +5,9 @@
 import mne
 import numpy as np
 
+PLACEHOLDER_INT = 42
+FILTER_ORDER = 5
+
 # =============================================================================
 # LOADING & SETUP
 # =============================================================================
@@ -23,27 +26,47 @@ def load_raw_gdf (path:str, eog_channels:list[int]) -> tuple[mne.io.Raw, mne.io.
     raw = mne.io.read_raw_gdf(path, preload=True, eog=eog_channels)
     return raw
 
+def load_raw_edf (path:str, eog_channels:list[int]) -> tuple[mne.io.Raw, mne.io.Raw]:
+    """
+    Imports a edf file using mne and returns only eeg channels.
 
-def rename_and_montage(raw:mne.io.Raw)->None:
+    Args:
+    path: string of the file path
+    eog_channels: list of the indices of the eog channels
+
+    Returns:
+    A loaded file as an mne object.
+    """
+    raw = mne.io.read_raw_edf(path, preload=True, eog=eog_channels)
+    return raw
+
+
+def rename_and_montage(raw:mne.io.Raw, filetype:str)->None:
     """
     Sets the montage to standard_1020 and renames the channel labels to match this format
 
     Args:
     raw: mne.io.Raw type that needs to be renamed and montaged (must be 22 eeg channels)
+    filetype: string indicating the file type ('gdf' or 'edf')
 
     Returns:
     None
     
     """
-
-    ch_names_correct = [
-    'Fz',
-    'FC3', 'FC1', 'FCz', 'FC2', 'FC4',
-    'C5', 'C3', 'C1', 'Cz', 'C2', 'C4', 'C6',
-    'CP3', 'CP1', 'CPz', 'CP2', 'CP4',
-    'P1', 'Pz', 'P2', 'POz'
-    ]
-
+    if filetype == 'gdf':
+        ch_names_correct = [
+        'Fz',
+        'FC3', 'FC1', 'FCz', 'FC2', 'FC4',
+        'C5', 'C3', 'C1', 'Cz', 'C2', 'C4', 'C6',
+        'CP3', 'CP1', 'CPz', 'CP2', 'CP4',
+        'P1', 'Pz', 'P2', 'POz'
+        ]
+    elif filetype == 'edf':
+        ch_names_correct = [
+            'CH1(uV)', 'CH2(uV)', 'CH3(uV)', 
+            'CH4(uV)', 'CH5(uV)', 'CH6(uV)', 
+            'CH7(uV)', 'CH8(uV)'
+        ]
     rename_map = {old: new for old, new in zip(raw.ch_names, ch_names_correct)}
     raw.rename_channels(rename_map)
 
@@ -71,7 +94,7 @@ def bandpass_filter(raw:mne.io.Raw, low, high, verbose:bool)->None:
 
     """
     raw.filter(l_freq=low, h_freq=high, method='iir',
-               iir_params=dict(order=5, ftype='butter'), verbose=verbose)
+               iir_params=dict(order=FILTER_ORDER, ftype='butter'), verbose=verbose)
     return
 
 def run_ica(raw:mne.io.Raw, n_components:int)->mne.preprocessing.ICA:
@@ -86,7 +109,7 @@ def run_ica(raw:mne.io.Raw, n_components:int)->mne.preprocessing.ICA:
     Fitted mne.preprocessing.ICA object
     
     """
-    ica = mne.preprocessing.ICA(n_components=n_components, method='fastica', random_state=42)
+    ica = mne.preprocessing.ICA(n_components=n_components, method='fastica', random_state=PLACEHOLDER_INT)
     ica.fit(raw, picks='eeg')
     return ica
 
@@ -134,6 +157,7 @@ def get_motor_events(raw: mne.io.Raw) -> tuple[np.ndarray, dict]:
         motor_event_id: dict mapping motor imagery class names to event codes
     """
     events, event_id = mne.events_from_annotations(raw)
+    ## TRANSLATION OF MARKERS INTO MOTOR IMAGERY CLASSES
     motor_event_id = {
         'left_hand':  event_id['769'],
         'right_hand': event_id['770'],

@@ -11,9 +11,15 @@ import sys
 from pathlib import Path
 from sklearn.model_selection import train_test_split
 
-from signal_processing import load_raw_gdf, rename_and_montage, bandpass_filter, run_ica, \
+from signal_processing import load_raw_edf, load_raw_gdf, rename_and_montage, bandpass_filter, run_ica, \
     apply_ica, epoch_raw, compute_tfr, get_motor_events, find_eog_artifacts, extract_raw_epochs
 
+
+EOG_CHANNELS = [22, 23, 24]  # EOG channels to drop from raw data
+BANDPASS_LOW = 3  # Low cutoff frequency for bandpass filter
+BANDPASS_HIGH = 35  # High cutoff frequency for bandpass filter
+ICA_COMPONENTS = 8 #20  # Number of ICA components to compute
+EPSILON = 1e-10  # Small constant to avoid division by zero in normalization
 
 # =============================================================================
 # FUNCTIONS
@@ -31,14 +37,14 @@ def log_normalize(power: np.ndarray) -> np.ndarray:
     Same array but log normalized. 
     """
     
-    epsilon = 1e-10
+    epsilon = EPSILON
     log_power = np.log(power + epsilon)
     mean = log_power.mean(axis=(1,2,3), keepdims=True)
     std = log_power.std(axis=(1,2,3), keepdims=True)
     return (log_power - mean) / (std + epsilon)
 
 def log_transform(power):
-    epsilon = 1e-10
+    epsilon = EPSILON
     return np.log(power + epsilon).astype(np.float32)
 
 
@@ -55,7 +61,7 @@ def normalize_raw(data: np.ndarray) -> np.ndarray:
         Standardized array of same shape, dtype float32
     """
 
-    epsilon = 1e-10
+    epsilon = EPSILON
     mean = data.mean(axis=2, keepdims=True)
     std = data.std(axis=2, keepdims=True)
 
@@ -74,24 +80,36 @@ def load_subject(subject_id: int, input_type:str = "spec", data_dir: str = "BCIC
     data_dir: default dir is BCICIV_2a_gdf. 
     """
 
+    # tool for using gdf vs edf files
+    gdf = True
+    edf = not gdf
+
     if manual_exclude is None:
         manual_exclude = []
 
-    # make filename
-    filename = f"A0{subject_id}T.gdf"
+    if gdf:
+        # make filename
+        filename = f"A0{subject_id}T.gdf"
 
-    # import data, drop EOG channels and keep only EEG
-    gdf_path = Path.cwd().parent / "data" / data_dir / filename
-    raw = load_raw_gdf(gdf_path, [22, 23, 24])
+        # import data, drop EOG channels and keep only EEG
+        gdf_path = Path.cwd().parent / "data" / data_dir / filename
+        raw = load_raw_gdf(gdf_path, EOG_CHANNELS)
+    elif edf:
+        # make filename
+        filename = f"A0{subject_id}T.edf"
+
+        # import data, drop EOG channels and keep only EEG
+        edf_path = Path.cwd().parent / "data" / data_dir / filename
+        raw = load_raw_edf(edf_path, EOG_CHANNELS)
 
     # montage channels + rename to the standard standard_1020  
-    rename_and_montage(raw)
+    rename_and_montage(raw, 'gdf' if gdf else 'edf')
 
     # bandpass from 3-35 Hz
-    bandpass_filter(raw, 3, 35, True)
+    bandpass_filter(raw, BANDPASS_LOW, BANDPASS_HIGH, True)
 
     # run ica
-    ica = run_ica(raw, 20)
+    ica = run_ica(raw, ICA_COMPONENTS)
 
     # find bad channels
     eog_indices = find_eog_artifacts(ica, raw)
